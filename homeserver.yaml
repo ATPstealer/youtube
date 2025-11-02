@@ -51,8 +51,8 @@ recaptcha_private_key: ""
 auto_join_rooms:
   - "#newreg:atpmatrix.com"
 
-turn_uris: ["turn:atpmatrix.com:3478?transport=udp", "turn:atpmatrix.com:3478?transport=tcp"]
-turn_shared_secret: "TURNSERVER_STATIC_AUTH_SECRET"
-turn_user_lifetime: 86400000  # 24 hours
-turn_allow_guests: True
+#turn_uris: ["turn:atpmatrix.com:3478?transport=udp", "turn:atpmatrix.com:3478?transport=tcp"]
+#turn_shared_secret: "TURNSERVER_STATIC_AUTH_SECRET"
+#turn_user_lifetime: 86400000  # 24 hours
+#turn_allow_guests: True
 # turn_restricted_to_local_network: True

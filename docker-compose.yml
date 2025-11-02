@@ -44,6 +44,7 @@ services:
       - /etc/nginx/docker-config:/etc/nginx/conf.d
       - /etc/letsencrypt/:/etc/letsencrypt/
       - /var/log/nginx:/var/log/nginx
+      - /var/synapse/data/.well-known/matrix:/var/synapse/data/.well-known/matrix
     ports:
       - "80:80"
       - "443:443"
@@ -54,22 +55,56 @@ services:
     networks:
       - synapse_network
 
-  turnserver:
-    image: instrumentisto/coturn
+#  turnserver:
+#    image: instrumentisto/coturn
+#    restart: unless-stopped
+#    ports:
+#      - "3478:3478/udp"
+#      - "3478:3478/tcp"
+#      - "5349:5349/tcp"
+#    environment:
+#      - TURNSERVER_LISTEN_PORT=3478
+#      - TURNSERVER_ALT_LISTEN_PORT=5349
+#      - TURNSERVER_MIN_PORT=49152
+#      - TURNSERVER_MAX_PORT=65535
+#      - TURNSERVER_REALM=atpmatrix.com
+#      - TURNSERVER_STATIC_AUTH_SECRET=TURNSERVER_STATIC_AUTH_SECRET
+#    volumes:
+#      - /var/synapse/turn:/etc/coturn
+#    networks:
+#      - synapse_network
+
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: element-call-livekit
+    command: --config /etc/livekit.yaml
+    restart: unless-stopped
+    volumes:
+      - /var/synapse/data/livekit.yaml:/etc/livekit.yaml:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "7880:7880/tcp"                # signaling (HTTP/WSS)
+      - "7881:7881/tcp"                # rtc tcp fallback
+      - "50100-50200:50100-50200/udp"  # RTP/ICE UDP
+      - "3478:3478/udp"                # TURN UDP
+      - "5349:5349/tcp"                # TURN/TLS
+    networks:
+      - synapse_network
+
+  auth-service:
+    image: ghcr.io/element-hq/lk-jwt-service:latest
+    container_name: element-call-jwt
+    hostname: auth-server
+    environment:
+      - LIVEKIT_JWT_PORT=8080
+      - LIVEKIT_URL=https://atpmatrix.com/livekit/sfu
+      - LIVEKIT_KEY=devkey
+      - LIVEKIT_SECRET=livekit_SECRET_change_it
+      - LIVEKIT_FULL_ACCESS_HOMESERVERS=atpmatrix.com
     restart: unless-stopped
     ports:
-      - "3478:3478/udp"
-      - "3478:3478/tcp"
-      - "5349:5349/tcp"
-    environment:
-      - TURNSERVER_LISTEN_PORT=3478
-      - TURNSERVER_ALT_LISTEN_PORT=5349
-      - TURNSERVER_MIN_PORT=49152
-      - TURNSERVER_MAX_PORT=65535
-      - TURNSERVER_REALM=atpmatrix.com
-      - TURNSERVER_STATIC_AUTH_SECRET=TURNSERVER_STATIC_AUTH_SECRET
-    volumes:
-      - /var/synapse/turn:/etc/coturn
+      - "8070:8080"
     networks:
       - synapse_network
 

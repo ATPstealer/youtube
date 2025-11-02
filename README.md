@@ -66,14 +66,18 @@ https://www.youtube.com/watch?v=o8MmU6NSq_Y
 * Restart service
 * Check https://test.atpmatrix.com/admin-url/#/login
 
-### Add turn server
-* Copy turn service to docker-compose file
-* Copy turn_ directives from homeserver.yaml example
-* Restart service
-* Check audio/video calls in client
 
 ### Install browser client
 * Copy element-web service to docker-compose file
 * Add to nginx config part with location ~ ^/web(/?)(.*)$ 
 * Restart service
 * Check https://test.atpmatrix.com/web/
+
+### Add livekit and jwt tokens for video calls
+from https://willlewis.co.uk/blog/posts/deploy-element-call-backend-with-synapse-and-docker-compose/?ref=element.io
+* Put well-known files to location like https://domain/.well-known/matrix/client. In my case it folder /var/synapse/data/.well-known/matrix
+* Create livekit.yaml like in example. I use same certificates "/etc/letsencrypt/live/atpmatrix.com/fullchain.pem". 
+* Add "livekit", "auth-service" services in docker-compose.yaml and throw directory /var/synapse/data/.well-known/matrix in nginx container 
+* Add "/.well-known/matrix/", "/sfu/get", "/livekit/sfu/" locations in nginx config (atpmatrix.com.conf)
+* Make sure that in /etc/hosts don't exist something like "127.0.1.1 atpmatrix.com atpmatrix". Now we need resolve in public IP.
+* Restart docker compose and read logs
