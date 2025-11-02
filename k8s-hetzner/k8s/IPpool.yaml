@@ -1,0 +1,20 @@
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: ippool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 94.130.228.76/32
+    - 157.90.30.28/32
+    - 167.235.56.111/32
+    - 49.12.233.169/32
+---
+apiVersion: metallb.io/v1beta1
+kind: BGPAdvertisement
+metadata:
+  name: external
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - ippool

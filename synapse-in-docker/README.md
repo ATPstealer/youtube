@@ -1,8 +1,8 @@
 ## Deploy for Ubuntu 22/24
 
 ### YouTube instruction rus
-https://www.youtube.com/watch?v=tuhoUhtuwy8
-https://www.youtube.com/watch?v=o8MmU6NSq_Y
+[part 1](https://www.youtube.com/watch?v=tuhoUhtuwy8)   
+[part 2](https://www.youtube.com/watch?v=o8MmU6NSq_Y)
 
 ### Preparation
 * Create A and AAAA records for server domain name. I use test.aptmatrix.com
