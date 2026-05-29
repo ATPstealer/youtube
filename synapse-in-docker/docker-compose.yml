@@ -119,6 +119,20 @@ services:
     ports:
       - "29318:29318"
 
+  mautrix-whatsapp:
+    container_name: mautrix-whatsapp
+    image: dock.mau.dev/mautrix/whatsapp:latest
+    restart: unless-stopped
+    depends_on:
+      - synapse
+      - db
+    volumes:
+      - /var/synapse/bridges/whatsapp/data:/data
+    networks:
+      - synapse_network
+    ports:
+      - "29319:29319"
+
   element-web:
     container_name: element-web
     image: vectorim/element-web
