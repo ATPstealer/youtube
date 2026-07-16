@@ -2,6 +2,13 @@
 import RPi.GPIO as GPIO
 import time
 import sys
+import logging
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # =================================================================
 # ОПРЕДЕЛЕНИЕ ПИНОВ (BCM нумерация)
@@ -33,6 +40,21 @@ left_counter = 0
 right_counter = 0
 left_pos = 0
 right_pos = 0
+left_last_state = 0
+right_last_state = 0
+
+transitions = {
+    (0b00, 0b01): 1,
+    (0b01, 0b11): 1,
+    (0b11, 0b10): 1,
+    (0b10, 0b00): 1,
+
+    (0b00, 0b10): -1,
+    (0b10, 0b11): -1,
+    (0b11, 0b01): -1,
+    (0b01, 0b00): -1,
+}
+
 p_left = None
 p_right = None
 test_results = []  # Список для итогового отчета
@@ -42,24 +64,34 @@ test_results = []  # Список для итогового отчета
 # =================================================================
 
 def left_encoder_callback(channel):
-    global left_counter, left_pos
-    left_counter += 1
-    # Используем RISING на A. В этот момент состояние B стабильно определяет направление.
-    # Если при RISING A канал B = 1, то одно направление, если 0 - другое.
-    if GPIO.input(L_ENC_B):
-        left_pos -= 1
-    else:
-        left_pos += 1
-    print(f"LEFT encoder: counter={left_counter}, pos={left_pos}")
+    global left_counter, left_pos, left_last_state
+    
+    a = GPIO.input(L_ENC_A)
+    b = GPIO.input(L_ENC_B)
+    current_state = (a << 1) | b
+    
+    if current_state != left_last_state:
+        transition = (left_last_state, current_state)
+        if transition in transitions:
+            left_pos += transitions[transition]
+            left_counter += 1
+        left_last_state = current_state
+        logging.debug(f"LEFT encoder: counter={left_counter}, pos={left_pos}")
 
 def right_encoder_callback(channel):
-    global right_counter, right_pos
-    right_counter += 1
-    if GPIO.input(R_ENC_B):
-        right_pos -= 1
-    else:
-        right_pos += 1
-    print(f"RIGHT encoder: counter={right_counter}, pos={right_pos}")
+    global right_counter, right_pos, right_last_state
+    
+    a = GPIO.input(R_ENC_A)
+    b = GPIO.input(R_ENC_B)
+    current_state = (a << 1) | b
+    
+    if current_state != right_last_state:
+        transition = (right_last_state, current_state)
+        if transition in transitions:
+            right_pos += transitions[transition]
+            right_counter += 1
+        right_last_state = current_state
+        logging.debug(f"RIGHT encoder: counter={right_counter}, pos={right_pos}")
 
 
 # =================================================================
@@ -69,7 +101,7 @@ def right_encoder_callback(channel):
 def setup():
     global p_left, p_right
     
-    print("Инициализация GPIO...")
+    logging.info("Инициализация GPIO...")
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
 
@@ -91,12 +123,18 @@ def setup():
         # Используем внутреннюю подтяжку вверх
         GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-    # Регистрация прерываний. Используем только RISING для более стабильного 
-    # определения направления в условиях ограниченной производительности Python.
-    GPIO.add_event_detect(L_ENC_A, GPIO.RISING, callback=left_encoder_callback)
-    GPIO.add_event_detect(R_ENC_A, GPIO.RISING, callback=right_encoder_callback)
+    # Начальное состояние энкодеров
+    global left_last_state, right_last_state
+    left_last_state = (GPIO.input(L_ENC_A) << 1) | GPIO.input(L_ENC_B)
+    right_last_state = (GPIO.input(R_ENC_A) << 1) | GPIO.input(R_ENC_B)
+
+    # Регистрация прерываний для обоих каналов A и B в режиме BOTH.
+    GPIO.add_event_detect(L_ENC_A, GPIO.BOTH, callback=left_encoder_callback)
+    GPIO.add_event_detect(L_ENC_B, GPIO.BOTH, callback=left_encoder_callback)
+    GPIO.add_event_detect(R_ENC_A, GPIO.BOTH, callback=right_encoder_callback)
+    GPIO.add_event_detect(R_ENC_B, GPIO.BOTH, callback=right_encoder_callback)
     
-    print("Инициализация завершена.")
+    logging.info("Инициализация завершена.")
 
 # run('l/r', 'f/b', 'speed(0-100)')
 def run(motor, direction, speed):
@@ -106,11 +144,12 @@ def run(motor, direction, speed):
         if direction == 'f':
             GPIO.output(L_IN1, GPIO.HIGH)
             GPIO.output(L_IN2, GPIO.LOW)
-        elif direction == 'backward':
+        elif direction == 'b':
             GPIO.output(L_IN1, GPIO.LOW)
             GPIO.output(L_IN2, GPIO.HIGH)
         else:
-            raise ValueError("direction должен быть 'forward' или 'backward'")
+            logging.error("direction должен быть 'forward' или 'backward'")
+            return
 
         p_left.ChangeDutyCycle(speed)
 
@@ -122,12 +161,13 @@ def run(motor, direction, speed):
             GPIO.output(R_IN3, GPIO.LOW)
             GPIO.output(R_IN4, GPIO.HIGH)
         else:
-            raise ValueError("direction должен быть 'forward' или 'backward'")
+            logging.error("direction должен быть 'forward' или 'backward'")
+            return
 
         p_right.ChangeDutyCycle(speed)
 
     else:
-        raise ValueError("motor должен быть 'left' или 'right'")
+        logging.error("motor должен быть 'left' или 'right'")
 
 def stop():
     p_left.ChangeDutyCycle(0)
