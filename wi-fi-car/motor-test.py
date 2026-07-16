@@ -6,7 +6,7 @@ import logging
 
 # Настройка логирования
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
@@ -180,8 +180,12 @@ def stop():
 
 
 setup()
-run('r', 'f', 30)
-
+run('r', 'f', 20)
+time.sleep(1)
+left_counter = 0
+right_counter = 0
+left_pos = 0
+right_pos = 0
 time.sleep(2)
 
 stop()
