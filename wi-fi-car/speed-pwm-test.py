@@ -3,6 +3,7 @@ import RPi.GPIO as GPIO
 import time
 import logging
 import csv
+import matplotlib.pyplot as plt
 
 # Настройка логирования
 logging.basicConfig(
@@ -122,10 +123,10 @@ def measure_speed(pwm_value, duration=2.0):
     stop_motors()
     time.sleep(0.5)
     run_motors(pwm_value)
-    
-    # Даем 1 секунду на стабилизацию скорости
-    time.sleep(1.0)
-    
+
+    # Даем 0.1 секунду на стабилизацию скорости
+    time.sleep(0.1)
+
     # Начало измерения
     left_counter = 0
     right_counter = 0
@@ -159,7 +160,7 @@ def main():
                 'left_speed': round(l_s, 2),
                 'right_speed': round(r_s, 2)
             })
-            time.sleep(0.5) # Небольшой отдых для моторов
+            time.sleep(0.1) # Небольшой отдых для моторов
             
         # Запись результатов в CSV
         filename = 'motor_speed_curve.csv'
@@ -175,6 +176,25 @@ def main():
         print("-" * 36)
         for res in results:
             print(f"{res['pwm']:7} | {res['left_speed']:11} | {res['right_speed']:12}")
+
+        # Построение графиков
+        pwms = [r['pwm'] for r in results]
+        left_speeds = [r['left_speed'] for r in results]
+        right_speeds = [r['right_speed'] for r in results]
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(pwms, left_speeds, label='Левый мотор', marker='o')
+        plt.plot(pwms, right_speeds, label='Правый мотор', marker='s')
+        plt.title('Зависимость скорости от PWM')
+        plt.xlabel('PWM (%)')
+        plt.ylabel('Скорость (tps)')
+        plt.grid(True)
+        plt.legend()
+        
+        plot_filename = 'motor_speed_curve.png'
+        plt.savefig(plot_filename)
+        logging.info(f"График сохранен в {plot_filename}")
+        plt.show()
 
     except KeyboardInterrupt:
         logging.info("Тест прерван пользователем.")
