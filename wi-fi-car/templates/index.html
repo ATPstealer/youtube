@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wi-Fi Car Control</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Wi-Fi Car Control</h1>
+        <div class="video-feed">
+            <img src="{{ url_for('video_feed') }}" alt="Live Feed">
+        </div>
+        
+        <div class="ui-panel">
+            <div class="speed-box">
+                <label for="speed-range">Speed: <span id="speed-display">30</span>%</label>
+                <input type="range" id="speed-range" min="0" max="100" value="30">
+            </div>
+
+            <div class="joystick">
+                <div class="row">
+                    <button class="btn" id="btn-up">▲</button>
+                </div>
+                <div class="row">
+                    <button class="btn" id="btn-left">◀</button>
+                    <button class="btn stop" id="btn-stop">STOP</button>
+                    <button class="btn" id="btn-right">▶</button>
+                </div>
+                <div class="row">
+                    <button class="btn" id="btn-down">▼</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/control.js') }}"></script>
+</body>
+</html>
