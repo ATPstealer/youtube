@@ -83,12 +83,12 @@ class MotorDriver:
         # Left Motor
         l_speed = max(-100, min(100, left))
         if l_speed >= 0:
-            GPIO.output(self.L_IN1, GPIO.LOW)
-            GPIO.output(self.L_IN2, GPIO.HIGH)
-            self.p_left.ChangeDutyCycle(l_speed)
-        else:
             GPIO.output(self.L_IN1, GPIO.HIGH)
             GPIO.output(self.L_IN2, GPIO.LOW)
+            self.p_left.ChangeDutyCycle(l_speed)
+        else:
+            GPIO.output(self.L_IN1, GPIO.LOW)
+            GPIO.output(self.L_IN2, GPIO.HIGH)
             self.p_left.ChangeDutyCycle(-l_speed)
 
         # Right Motor
