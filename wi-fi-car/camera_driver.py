@@ -130,13 +130,13 @@ class CameraDriver:
                 pass
 
     def _get_mock_frame(self):
-        """Генерирует тестовый кадр, если реальная камера недоступна."""
-        # Создаем темно-серое изображение
+        """Generates a test frame if the physical camera is unavailable."""
+        # Create a dark gray image
         height, width = 480, 640
         image = np.zeros((height, width, 3), np.uint8)
         image[:] = (50, 50, 50)
         
-        # Добавляем текст
+        # Add text
         text = "MOCK CAMERA"
         timestamp = time.strftime("%H:%M:%S")
         cv2.putText(image, text, (150, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
@@ -147,7 +147,7 @@ class CameraDriver:
         return jpeg.tobytes()
 
     def get_frame(self):
-        """Захватывает кадр и возвращает его в формате JPEG bytes."""
+        """Captures a frame and returns it as JPEG bytes."""
         if self.mock_mode:
             return self._get_mock_frame()
             
@@ -164,7 +164,7 @@ class CameraDriver:
             logging.error("Failed to capture frame from camera. Returning mock frame.")
             return self._get_mock_frame()
         
-        # Опционально: обработка изображения
+        # Optional: image processing
         # image = cv2.resize(image, (640, 480))
         
         ret, jpeg = cv2.imencode('.jpg', image)

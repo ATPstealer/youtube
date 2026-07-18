@@ -4,36 +4,36 @@ import time
 import sys
 import logging
 
-# Настройка логирования
+# Logging setup
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
 # =================================================================
-# ОПРЕДЕЛЕНИЕ ПИНОВ (BCM нумерация)
+# PIN DEFINITIONS (BCM numbering)
 # =================================================================
 
-# ЛЕВЫЙ МОТОР (P4)
+# LEFT MOTOR (P4)
 L_ENA = 12  # pin 32 (PWM)
 L_IN1 = 20  # pin 38
 L_IN2 = 21  # pin 40
 
-# ПРАВЫЙ МОТОР (P3)
+# RIGHT MOTOR (P3)
 R_ENB = 13  # pin 33 (PWM)
 R_IN3 = 19  # pin 35
 R_IN4 = 26  # pin 37
 
-# ЛЕВЫЙ ЭНКОДЕР
+# LEFT ENCODER
 L_ENC_A = 14  # pin 8
 L_ENC_B = 15  # pin 10
 
-# ПРАВЫЙ ЭНКОДЕР
+# RIGHT ENCODER
 R_ENC_A = 17  # pin 11
 R_ENC_B = 27  # pin 13
 
 # =================================================================
-# ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+# GLOBAL VARIABLES
 # =================================================================
 
 left_counter = 0
@@ -57,10 +57,10 @@ transitions = {
 
 p_left = None
 p_right = None
-test_results = []  # Список для итогового отчета
+test_results = []  # List for final report
 
 # =================================================================
-# ОБРАБОТЧИКИ ПРЕРЫВАНИЙ ЭНКОДЕРОВ
+# ENCODER INTERRUPT HANDLERS
 # =================================================================
 
 def left_encoder_callback(channel):
@@ -95,46 +95,46 @@ def right_encoder_callback(channel):
 
 
 # =================================================================
-# НАСТРОЙКА GPIO
+# GPIO SETUP
 # =================================================================
 
 def setup():
     global p_left, p_right
     
-    logging.info("Инициализация GPIO...")
+    logging.info("Initializing GPIO...")
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
 
-    # Настройка пинов управления моторами
+    # Motor control pins setup
     motor_pins = [L_ENA, L_IN1, L_IN2, R_ENB, R_IN3, R_IN4]
     for pin in motor_pins:
         GPIO.setup(pin, GPIO.OUT)
         GPIO.output(pin, GPIO.LOW)
 
-    # Настройка ШИМ (PWM) для скорости
-    p_left = GPIO.PWM(L_ENA, 1000)   # Частота 1 кГц
-    p_right = GPIO.PWM(R_ENB, 1000)  # Частота 1 кГц
+    # PWM setup for speed
+    p_left = GPIO.PWM(L_ENA, 1000)   # 1 kHz frequency
+    p_right = GPIO.PWM(R_ENB, 1000)  # 1 kHz frequency
     p_left.start(0)
     p_right.start(0)
 
-    # Настройка пинов энкодеров
+    # Encoder pins setup
     encoder_pins = [L_ENC_A, L_ENC_B, R_ENC_A, R_ENC_B]
     for pin in encoder_pins:
-        # Используем внутреннюю подтяжку вверх
+        # Use internal pull-up
         GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-    # Начальное состояние энкодеров
+    # Initial encoder state
     global left_last_state, right_last_state
     left_last_state = (GPIO.input(L_ENC_A) << 1) | GPIO.input(L_ENC_B)
     right_last_state = (GPIO.input(R_ENC_A) << 1) | GPIO.input(R_ENC_B)
 
-    # Регистрация прерываний для обоих каналов A и B в режиме BOTH.
+    # Interrupt registration for both A and B channels in BOTH mode.
     GPIO.add_event_detect(L_ENC_A, GPIO.BOTH, callback=left_encoder_callback)
     GPIO.add_event_detect(L_ENC_B, GPIO.BOTH, callback=left_encoder_callback)
     GPIO.add_event_detect(R_ENC_A, GPIO.BOTH, callback=right_encoder_callback)
     GPIO.add_event_detect(R_ENC_B, GPIO.BOTH, callback=right_encoder_callback)
     
-    logging.info("Инициализация завершена.")
+    logging.info("Initialization complete.")
 
 # run('l/r', 'f/b', 'speed(0-100)')
 def run(motor, direction, speed):
@@ -148,7 +148,7 @@ def run(motor, direction, speed):
             GPIO.output(L_IN1, GPIO.LOW)
             GPIO.output(L_IN2, GPIO.HIGH)
         else:
-            logging.error("direction должен быть 'forward' или 'backward'")
+            logging.error("direction must be 'forward' or 'backward'")
             return
 
         p_left.ChangeDutyCycle(speed)
@@ -161,13 +161,13 @@ def run(motor, direction, speed):
             GPIO.output(R_IN3, GPIO.LOW)
             GPIO.output(R_IN4, GPIO.HIGH)
         else:
-            logging.error("direction должен быть 'forward' или 'backward'")
+            logging.error("direction must be 'forward' or 'backward'")
             return
 
         p_right.ChangeDutyCycle(speed)
 
     else:
-        logging.error("motor должен быть 'left' или 'right'")
+        logging.error("motor must be 'left' or 'right'")
 
 def stop():
     p_left.ChangeDutyCycle(0)
