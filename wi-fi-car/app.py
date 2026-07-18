@@ -1,4 +1,6 @@
 import argparse
+import collections
+import threading
 import motor_driver
 import car_controller
 import camera_driver
@@ -12,6 +14,18 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+# Web log buffer
+log_buffer = collections.deque(maxlen=50)
+
+class WebLogHandler(logging.Handler):
+    def emit(self, record):
+        log_entry = self.format(record)
+        log_buffer.append(log_entry)
+
+web_handler = WebLogHandler()
+web_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logging.getLogger().addHandler(web_handler)
 
 app = Flask(__name__)
 
@@ -50,23 +64,31 @@ def video_feed():
 @app.route('/control', methods=['POST'])
 def control():
     """Control API for movement."""
-    global controller
+    global controller, driver
     data = request.get_json()
     action = data.get('action') # 'move', 'turn' or 'stop'
     speed = int(data.get('speed', 0))
     direction = data.get('direction', 'f')
     
+    l_enc, r_enc = driver.get_encoders() if driver else (0, 0)
+    
     if action == 'stop' or speed == 0:
         controller.stop()
-        logging.info("Web Control: Stop")
+        logging.info(f"Web Control: Stop | Encoders: L={l_enc}, R={r_enc}")
     elif action == 'turn':
         # direction here is 'l' or 'r'
         controller.turn(speed, direction)
+        logging.info(f"Web Control: Turn {direction} at {speed}% | Encoders: L={l_enc}, R={r_enc}")
     else:
         controller.drive(speed, direction)
-        logging.info(f"Web Control: Drive {direction} at {speed}%")
+        logging.info(f"Web Control: Drive {direction} at {speed}% | Encoders: L={l_enc}, R={r_enc}")
         
     return jsonify({'status': 'ok'})
+
+@app.route('/logs')
+def get_logs():
+    """Returns the last N log entries as JSON."""
+    return jsonify(list(log_buffer))
 
 def test_camera():
     """
@@ -146,6 +168,20 @@ def test_motor_speed(step):
         GPIO.cleanup()
         logging.info("GPIO cleaned up.")
 
+def status_logger():
+    """Background thread to log encoder and PWM values periodically."""
+    global driver, controller
+    while True:
+        try:
+            if driver and controller:
+                l_enc, r_enc = driver.get_encoders()
+                l_pwm = controller.current_l_pwm
+                r_pwm = controller.current_r_pwm
+                logging.info(f"FULL STATUS: Encoders L={l_enc}, R={r_enc} | PWM L={l_pwm}, R={r_pwm}")
+        except Exception as e:
+            logging.error(f"Error in status_logger: {e}")
+        time.sleep(5.0)
+
 def main():
     global driver, controller
     
@@ -164,6 +200,10 @@ def main():
         logging.info(f"Starting web server on port {args.port}...")
         driver = motor_driver.MotorDriver()
         controller = car_controller.CarController(driver)
+        
+        # Start background status logger
+        threading.Thread(target=status_logger, daemon=True).start()
+        
         try:
             app.run(host='0.0.0.0', port=args.port, threaded=True)
         finally:

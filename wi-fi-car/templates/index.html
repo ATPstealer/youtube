@@ -33,6 +33,14 @@
                 </div>
             </div>
         </div>
+
+        <div class="log-panel">
+            <div class="log-header" id="log-toggle">
+                <span>System Logs</span>
+                <span id="log-indicator">▼</span>
+            </div>
+            <div class="log-content hidden" id="log-box"></div>
+        </div>
     </div>
     <script src="{{ url_for('static', filename='js/control.js') }}"></script>
 </body>

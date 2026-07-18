@@ -7,6 +7,10 @@ class CarController:
         # Approximate maximum Ticks Per Second from SPEED.MD (at 100% PWM)
         self.max_tps = 4600.0
         
+        # Current motor state
+        self.current_l_pwm = 0.0
+        self.current_r_pwm = 0.0
+        
         # Calibration data points from SPEED.MD: PWM -> (Left TPS, Right TPS)
         # Using a subset of points for efficient interpolation
         self.calibration_points = {
@@ -48,6 +52,8 @@ class CarController:
             l_pwm = -l_pwm
             r_pwm = -r_pwm
             
+        self.current_l_pwm = l_pwm
+        self.current_r_pwm = r_pwm
         logging.info(f"Driving {direction} at {speed_pct}% speed (L_PWM={l_pwm}, R_PWM={r_pwm})")
         self.driver.set_pwm(l_pwm, r_pwm)
 
@@ -58,14 +64,20 @@ class CarController:
         """
         l_pwm, r_pwm = self.get_pwms_for_speed(speed_pct)
         if side == 'l':
+            l_pwm_final, r_pwm_final = -l_pwm, r_pwm
             logging.info(f"Turning Left at {speed_pct}%")
-            self.driver.set_pwm(-l_pwm, r_pwm)
         else:
+            l_pwm_final, r_pwm_final = l_pwm, -r_pwm
             logging.info(f"Turning Right at {speed_pct}%")
-            self.driver.set_pwm(l_pwm, -r_pwm)
+        
+        self.current_l_pwm = l_pwm_final
+        self.current_r_pwm = r_pwm_final
+        self.driver.set_pwm(l_pwm_final, r_pwm_final)
 
     def stop(self):
         """Stops the car."""
+        self.current_l_pwm = 0.0
+        self.current_r_pwm = 0.0
         self.driver.stop()
 
     def drive_stabilized(self, speed_pct, duration, direction='f'):
@@ -114,6 +126,8 @@ class CarController:
                 l_curr = max(0, min(l_curr, l_base))
                 r_curr = max(0, min(r_curr, r_base))
                 
+                self.current_l_pwm = l_curr * sign
+                self.current_r_pwm = r_curr * sign
                 self.driver.set_pwm(l_curr * sign, r_curr * sign)
                 
                 # Optional: log status every second
