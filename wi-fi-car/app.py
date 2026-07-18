@@ -33,11 +33,13 @@ app = Flask(__name__)
 driver = None
 controller = None
 cam = None
+cam_lock = threading.Lock()
 
 def get_cam():
     global cam
-    if cam is None:
-        cam = camera_driver.CameraDriver()
+    with cam_lock:
+        if cam is None:
+            cam = camera_driver.CameraDriver()
     return cam
 
 def gen_frames():
@@ -207,6 +209,8 @@ def main():
         try:
             app.run(host='0.0.0.0', port=args.port, threaded=True)
         finally:
+            if cam:
+                cam.release()
             controller.stop()
             GPIO.cleanup()
             logging.info("Cleaned up on exit.")

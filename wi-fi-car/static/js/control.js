@@ -47,6 +47,57 @@ Object.keys(buttons).forEach(id => {
     }
 });
 
+// --- WASD Control Logic ---
+const keyMap = {
+    'w': 'btn-up',
+    's': 'btn-down',
+    'a': 'btn-left',
+    'd': 'btn-right',
+    'W': 'btn-up',
+    'S': 'btn-down',
+    'A': 'btn-left',
+    'D': 'btn-right'
+};
+
+let activeKeyStack = [];
+
+window.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+    const btnId = keyMap[e.key];
+    if (btnId && !activeKeyStack.includes(key)) {
+        activeKeyStack.push(key);
+        const config = buttons[btnId];
+        document.getElementById(btnId).classList.add('active');
+        sendCommand(config.action, config.direction);
+    }
+    if (e.key === ' ') { // Space for stop
+        sendCommand('stop', '');
+        document.getElementById('btn-stop').classList.add('active');
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    const key = e.key.toLowerCase();
+    const btnId = keyMap[e.key];
+    if (btnId) {
+        activeKeyStack = activeKeyStack.filter(k => k !== key);
+        document.getElementById(btnId).classList.remove('active');
+        
+        if (activeKeyStack.length > 0) {
+            // Re-send command for the last pressed key that is still held
+            const lastKey = activeKeyStack[activeKeyStack.length - 1];
+            const lastBtnId = keyMap[lastKey];
+            const config = buttons[lastBtnId];
+            sendCommand(config.action, config.direction);
+        } else {
+            sendCommand('stop', '');
+        }
+    }
+    if (e.key === ' ') {
+        document.getElementById('btn-stop').classList.remove('active');
+    }
+});
+
 // --- Log Panel Logic ---
 const logBox = document.getElementById('log-box');
 const logToggle = document.getElementById('log-toggle');

@@ -2,10 +2,12 @@ import cv2
 import logging
 import numpy as np
 import time
+import threading
 import subprocess
 
 class CameraDriver:
     def __init__(self):
+        self.lock = threading.Lock()
         self.mock_mode = False
         self.video = None
         self.proc = None # Subprocess for rpicam-vid fallback
@@ -119,15 +121,22 @@ class CameraDriver:
             logging.error(f"Error reading frame from subprocess: {e}")
             return None
 
+    def release(self):
+        """Releases the camera resources."""
+        with self.lock:
+            if self.video and self.video.isOpened():
+                self.video.release()
+                self.video = None
+            if self.proc:
+                try:
+                    self.proc.terminate()
+                    self.proc.wait(timeout=1)
+                except:
+                    pass
+                self.proc = None
+
     def __del__(self):
-        if hasattr(self, 'video') and self.video and self.video.isOpened():
-            self.video.release()
-        if hasattr(self, 'proc') and self.proc:
-            try:
-                self.proc.terminate()
-                self.proc.wait(timeout=1)
-            except:
-                pass
+        self.release()
 
     def _get_mock_frame(self):
         """Generates a test frame if the physical camera is unavailable."""
@@ -148,24 +157,29 @@ class CameraDriver:
 
     def get_frame(self):
         """Captures a frame and returns it as JPEG bytes."""
-        if self.mock_mode:
-            return self._get_mock_frame()
-            
-        if self.proc:
-            frame = self._get_frame_from_subprocess()
-            if frame:
-                return frame
-            else:
-                logging.error("Failed to capture frame from subprocess. Returning mock frame.")
+        with self.lock:
+            if self.mock_mode:
+                return self._get_mock_frame()
+                
+            if self.proc:
+                frame = self._get_frame_from_subprocess()
+                if frame:
+                    return frame
+                else:
+                    logging.error("Failed to capture frame from subprocess. Returning mock frame.")
+                    return self._get_mock_frame()
+
+            if self.video is None or not self.video.isOpened():
+                logging.error("Camera is not opened. Returning mock frame.")
                 return self._get_mock_frame()
 
-        success, image = self.video.read()
-        if not success:
-            logging.error("Failed to capture frame from camera. Returning mock frame.")
-            return self._get_mock_frame()
-        
-        # Optional: image processing
-        # image = cv2.resize(image, (640, 480))
-        
-        ret, jpeg = cv2.imencode('.jpg', image)
-        return jpeg.tobytes()
+            success, image = self.video.read()
+            if not success:
+                logging.error("Failed to capture frame from camera. Returning mock frame.")
+                return self._get_mock_frame()
+            
+            # Optional: image processing
+            # image = cv2.resize(image, (640, 480))
+            
+            ret, jpeg = cv2.imencode('.jpg', image)
+            return jpeg.tobytes()
