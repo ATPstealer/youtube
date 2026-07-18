@@ -2,72 +2,72 @@
 sessionId: session-260718-111704-npfp
 ---
 
-# Требования (Requirements)
+# Requirements
 
-### Обзор и цели
-Цель - превратить существующие скрипты `motor-test.py` и `speed-pwm-test.py` в модульное веб-приложение с продвинутым управлением. Ключевым требованием является миграция текущего функционала в новую структуру (`app.py`, `motor_driver.py`) на начальном этапе, а затем реализация многоуровневой архитектуры: низкоуровневый драйвер для прямого управления ШИМ и высокоуровневый контроллер для управления логической скоростью с коррекцией по энкодерам.
+### Overview and Goals
+The goal is to transform existing scripts `motor-test.py` and `speed-pwm-test.py` into a modular web application with advanced control. A key requirement is the migration of current functionality into a new structure (`app.py`, `motor_driver.py`) at the initial stage, followed by the implementation of a multi-level architecture: a low-level driver for direct PWM control and a high-level controller for logical speed management with encoder-based correction.
 
-**Особенности процесса:**
-- **Итеративность:** Разработка ведется строго по одной функции/методу за раз. Каждое изменение сопровождается примером кода, который пользователь может запустить для проверки.
-- **Сохранение тестов:** Все существующие тесты интегрируются в `app.py`. Запуск через ключи командной строки (CLI). Приложение выводит результаты в stdout и завершается.
-- **Логика коррекции:** При отклонении от прямой (по данным энкодеров) мощность "убегающего" мотора снижается, а затем постепенно "подращивается" (возвращается к расчетному уровню) при выравнивании.
+**Process specifics:**
+- **Iterability:** Development is carried out strictly one function/method at a time. Each change is accompanied by a code example that the user can run for verification.
+- **Test preservation:** All existing tests are integrated into `app.py`. Execution via command-line interface (CLI) flags. The application outputs results to stdout and terminates.
+- **Correction logic:** When deviating from a straight line (based on encoder data), the power of the "runaway" motor is reduced and then gradually "regrown" (returns to the calculated level) during leveling.
 
-### Область применения
-- **Входит в проект:**
-    - Начальная миграция: создание `app.py` и `motor_driver.py` с сохранением текущей логики тестов.
-    - Разделение логики на `MotorDriver` (низкий уровень) и `CarController` (высокий уровень).
-    - Реализация квадратурного декодирования энкодеров (на базе `motor-test.py`).
-    - Реализация системы калибровки (по данным `SPEED.MD`) и обратной связи (PID-подобная коррекция для движения по прямой).
-    - Интеграция тестов в `app.py` (ключ `--test-motor-speed`).
-    - Веб-интерфейс (Flask) и стриминг видео.
-- **Не входит в проект:**
-    - Изменение аппаратной части.
-    - Сложные алгоритмы навигации (SLAM и т.д.).
+### Scope
+- **Included in the project:**
+    - Initial migration: creating `app.py` and `motor_driver.py` while preserving current test logic.
+    - Separation of logic into `MotorDriver` (low level) and `CarController` (high level).
+    - Implementation of quadrature encoder decoding (based on `motor-test.py`).
+    - Implementation of a calibration system (based on `SPEED.MD` data) and feedback loop (PID-like correction for straight-line movement).
+    - Integration of tests into `app.py` (`--test-motor-speed` flag).
+    - Web interface (Flask) and video streaming.
+- **Excluded from the project:**
+    - Hardware changes.
+    - Complex navigation algorithms (SLAM, etc.).
 
-### Функциональные требования
-- **Двухуровневое управление:** 
-    - Низкий уровень (`MotorDriver`): Прямое управление ШИМ (PWM) и чтение энкодеров.
-    - Высокий уровень (`CarController`): Пользователь задает скорость в %, система подбирает PWM на основе калибровки.
-- **Стабильность курса:** Автоматическая коррекция при движении по прямой: если одна сторона быстрее, ее PWM снижается, а затем постепенно возвращается к расчетному уровню.
-- **Единые CLI тесты:** Команда `--test-motor-speed` объединяет функционал проверки моторов и снятия скоростных характеристик. Поддерживает параметр дискретизации (шага) ШИМ.
-- **Автономность тестов:** Тестовые режимы выводят данные в консоль и автоматически завершают работу процесса.
+### Functional Requirements
+- **Two-level control:** 
+    - Low level (`MotorDriver`): Direct PWM control and encoder reading.
+    - High level (`CarController`): User sets speed in %, the system selects PWM based on calibration.
+- **Course stability:** Automatic correction during straight-line movement: if one side is faster, its PWM is reduced and then gradually returns to the calculated level.
+- **Unified CLI tests:** The `--test-motor-speed` command combines motor verification functionality and speed characterization. Supports PWM step parameter.
+- **Test autonomy:** Test modes output data to the console and automatically terminate the process.
 
-# Технический дизайн (Technical Design)
+# Technical Design
 
-### Текущая ситуация
-Проект содержит разрозненные скрипты тестирования, которые напрямую работают с GPIO. Это затрудняет их повторное использование в веб-приложении.
+### Current Situation
+The project contains fragmented testing scripts that work directly with GPIO. This makes it difficult to reuse them in a web application.
 
-### Предлагаемая архитектура
-Проект будет разделен на следующие компоненты:
+### Proposed Architecture
+The project will be divided into the following components:
 1.  **`motor_driver.py` (`MotorDriver`)**: 
-    - Прямая работа с GPIO и ШИМ.
-    - Квадратурное декодирование энкодеров (логика из `motor-test.py`).
+    - Direct GPIO and PWM operation.
+    - Quadrature encoder decoding (logic from `motor-test.py`).
     - API: `set_pwm(left, right)`, `get_encoders()`, `stop()`.
 2.  **`car_controller.py` (`CarController`)**:
-    - Использует `MotorDriver` для выполнения высокоуровневых команд.
-    - Маппинг `% скорости` -> `PWM` (на основе данных из `SPEED.MD`).
-    - Алгоритм обратной связи: 
-        - Если `Enc_Left > Enc_Right`: `L_pwm--` (уменьшаем мощность левого).
-        - Если `Enc_Right > Enc_Left`: `R_pwm--` (уменьшаем мощность правого).
-        - Постепенный возврат к целевому PWM при выравнивании.
-3.  **`camera_driver.py`**: Захват видео.
-4.  **`app.py`**: Главная точка входа.
-    - CLI режим: Обработка ключа `--test-motor-speed [STEP]`. Выполняет проверку моторов и замер TPS с заданным шагом ШИМ. Результаты выводятся в stdout, после чего приложение завершается.
-    - Server режим: Запуск Flask.
+    - Uses `MotorDriver` to execute high-level commands.
+    - Mapping `% speed` -> `PWM` (based on data from `SPEED.MD`).
+    - Feedback algorithm: 
+        - If `Enc_Left > Enc_Right`: `L_pwm--` (reduce left power).
+        - If `Enc_Right > Enc_Left`: `R_pwm--` (reduce right power).
+        - Gradual return to target PWM during leveling.
+3.  **`camera_driver.py`**: Video capture.
+4.  **`app.py`**: Main entry point.
+    - CLI mode: Processing the `--test-motor-speed [STEP]` flag. Performs motor check and TPS measurement with a given PWM step. Results are output to stdout, after which the application terminates.
+    - Server mode: Launching Flask.
 
-### Процесс разработки
-Строгое соблюдение "одна функция за раз":
-1.  Агент предлагает реализацию конкретного метода/блока кода.
-2.  Агент предоставляет пример кода (сниппет), который пользователь может запустить для проверки этой конкретной функции (без создания множества отдельных файлов).
-3.  Переход к следующему шагу только после одобрения пользователем.
+### Development Process
+Strict adherence to "one function at a time":
+1.  The agent proposes the implementation of a specific method/code block.
+2.  The agent provides a code example (snippet) that the user can run to verify this specific function (without creating many separate files).
+3.  Proceeding to the next step only after user approval.
 
-### Структура файлов
+### File Structure
 ```text
 wi-fi-car/
-├── app.py              # Точка входа (CLI + Flask)
-├── motor_driver.py     # Низкоуровневый драйвер (MotorDriver)
-├── car_controller.py   # Высокоуровневый контроллер (CarController)
-├── camera_driver.py    # Драйвер камеры
+├── app.py              # Entry point (CLI + Flask)
+├── motor_driver.py     # Low-level driver (MotorDriver)
+├── car_controller.py   # High-level controller (CarController)
+├── camera_driver.py    # Camera driver
 ├── templates/
 │   └── index.html      # UI
 └── static/
@@ -77,42 +77,42 @@ wi-fi-car/
 
 # Delivery Steps
 
-### ✓ Step 1: Базовая структура и текущая реализация
-Создание каркаса проекта с текущим функционалом.
+### ✓ Step 1: Base structure and current implementation
+Creating the project framework with current functionality.
 
-- Создание `app.py` и `motor_driver.py` на основе существующего кода.
-- Перенос констант и базовых функций управления (`setup`, `run`, `stop`) и энкодеров из `motor-test.py`.
-- Реализация CLI-парсера в `app.py` с поддержкой ключа `--test-motor-speed`.
-- Результат: Приложение запускается, инициализирует оборудование и может выполнить базовый тест.
+- Creating `app.py` and `motor_driver.py` based on existing code.
+- Moving constants and basic control functions (`setup`, `run`, `stop`) and encoders from `motor-test.py`.
+- Implementing CLI parser in `app.py` with support for the `--test-motor-speed` flag.
+- Result: The application starts, initializes hardware, and can perform a basic test.
 
-### ✓ Step 2: Рефакторинг MotorDriver в класс
-Преобразование процедурного кода в объектно-ориентированный.
+### ✓ Step 2: Refactoring MotorDriver into a class
+Converting procedural code into object-oriented.
 
-- Итерация 1.1: Метод `__init__` (инициализация GPIO).
-- Итерация 1.2: Метод `set_pwm(left, right)` для прямого управления.
-- Итерация 1.3: Методы `get_encoders()` и `reset_encoders()`.
-- Результат: Чистый объектно-ориентированный интерфейс для работы с железом.
+- Iteration 1.1: `__init__` method (GPIO initialization).
+- Iteration 1.2: `set_pwm(left, right)` method for direct control.
+- Iteration 1.3: `get_encoders()` and `reset_encoders()` methods.
+- Result: Clean object-oriented interface for working with hardware.
 
-### ✓ Step 3: Создание CarController и калибровка
-- Реализация высокоуровневой логики на базе `MotorDriver`.
-- Итерация 2.1: Маппинг "Желаемая скорость %" -> "PWM Левый" и "PWM Правый" (по данным `SPEED.MD`).
-- Итерация 2.2: Метод `drive(speed_pct, direction)`.
-- Результат: Робот едет с заданной скоростью, используя предустановленные калибровочные значения.
+### ✓ Step 3: Creating CarController and calibration
+- Implementation of high-level logic based on `MotorDriver`.
+- Iteration 2.1: Mapping "Desired speed %" -> "Left PWM" and "Right PWM" (based on `SPEED.MD` data).
+- Iteration 2.2: `drive(speed_pct, direction)` method.
+- Result: The robot drives at a given speed using preset calibration values.
 
-### ✓ Step 4: Алгоритм удержания прямой (Feedback Loop)
-- Итерация 3.1: Реализация цикла мониторинга разницы энкодеров во время движения.
-- Итерация 3.2: Динамическая коррекция: временное уменьшение PWM для "убегающего" (более быстрого) мотора.
-- Итерация 3.3: Постепенное "подращивание" PWM обратно до расчетного уровня.
-- Результат: Стабильное движение по прямой линии с компенсацией физических различий моторов.
+### ✓ Step 4: Straight-line holding algorithm (Feedback Loop)
+- Iteration 3.1: Implementation of an encoder difference monitoring loop during movement.
+- Iteration 3.2: Dynamic correction: temporary reduction of PWM for the "runaway" (faster) motor.
+- Iteration 3.3: Gradual "regrowing" of PWM back to the calculated level.
+- Result: Stable straight-line movement with compensation for physical motor differences.
 
-### ✓ Step 5: Реализация расширенного теста --test-motor-speed
-- Реализация логики замера характеристик с поддержкой дискретизации.
-- Итерация 4.1: Реализация цикла замера TPS с шагом, заданным через CLI аргумент (например, `--test-motor-speed 10`).
-- Итерация 4.2: Форматированный вывод таблицы результатов в stdout и завершение процесса.
-- Результат: Единый инструмент для проверки моторов и получения данных для калибровки.
+### ✓ Step 5: Implementation of the extended test --test-motor-speed
+- Implementation of characterization measurement logic with step support.
+- Iteration 4.1: Implementation of the TPS measurement loop with a step given via CLI argument (e.g., `--test-motor-speed 10`).
+- Iteration 4.2: Formatted output of the results table to stdout and process termination.
+- Result: A unified tool for checking motors and obtaining calibration data.
 
-### ✓ Step 6: Веб-интерфейс и видео
-- Итерация 5.1: Драйвер камеры `camera_driver.py`.
-- Итерация 5.2: Flask-маршруты для управления и стриминга.
-- Итерация 5.3: UI (HTML/JS) для удаленного контроля.
-- Результат: Завершенное модульное приложение.
+### ✓ Step 6: Web interface and video
+- Iteration 5.1: Camera driver `camera_driver.py`.
+- Iteration 5.2: Flask routes for control and streaming.
+- Iteration 5.3: UI (HTML/JS) for remote control.
+- Result: Completed modular application.
