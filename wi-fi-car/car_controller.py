@@ -4,26 +4,25 @@ import time
 class CarController:
     def __init__(self, driver):
         self.driver = driver
-        # Approximate maximum Ticks Per Second from SPEED.MD (at 100% PWM)
-        self.max_tps = 4600.0
-        
+        # Approximate maximum Ticks Per Second (at 100% PWM), from re-calibration after motor swap
+        self.max_tps = 1110.7
+
         # Current motor state
         self.current_l_pwm = 0.0
         self.current_r_pwm = 0.0
-        
-        # Calibration data points from SPEED.MD: PWM -> (Left TPS, Right TPS)
+
+        # Calibration data points from re-calibration after motor swap: PWM -> (Left TPS, Right TPS)
         # Using a subset of points for efficient interpolation
         self.calibration_points = {
-            14: (728.47, 835.47),
-            20: (1458.94, 1425.44),
-            30: (2284.41, 2308.41),
-            40: (2897.33, 2938.33),
-            50: (3346.37, 3416.86),
-            60: (3636.32, 3742.81),
-            70: (3900.34, 3972.34),
-            80: (4081.35, 4145.34),
-            90: (4262.82, 4339.32),
-            100: (4582.32, 4685.32)
+            20: (414.48, 430.98),
+            30: (623.47, 637.97),
+            40: (763.97, 777.97),
+            50: (863.96, 872.46),
+            60: (929.42, 936.42),
+            70: (977.96, 979.96),
+            80: (1011.96, 1012.46),
+            90: (1045.96, 1041.96),
+            100: (1113.95, 1107.45)
         }
 
     def get_pwms_for_speed(self, speed_pct):
@@ -96,7 +95,7 @@ class CarController:
         
         start_time = time.time()
         check_interval = 0.1   # 100ms
-        diff_threshold = 20    # tick difference to trigger correction
+        diff_threshold = 5     # tick difference to trigger correction (1x decoding = 1/4 the ticks of before)
         correction_step = 1.0  # PWM units to decrease
         growth_step = 0.5      # PWM units to grow back
         

@@ -120,15 +120,11 @@ def test_motor_speed(step):
         
         for pwm in pwm_values:
             logging.info(f"Measuring characteristics for {pwm}% PWM...")
-            
-            # Reset and small rest
-            driver.stop()
-            time.sleep(0.5)
-            
+
             # Start motors
             driver.set_pwm(pwm, pwm)
             # Short stabilization period
-            time.sleep(0.2)
+            time.sleep(1)
             
             # Start measurement
             driver.reset_encoders()

@@ -14,13 +14,6 @@ class MotorDriver:
         self.right_counter = 0
         self.left_pos = 0
         self.right_pos = 0
-        self.left_last_state = 0
-        self.right_last_state = 0
-
-        self.transitions = {
-            (0b00, 0b01): 1, (0b01, 0b11): 1, (0b11, 0b10): 1, (0b10, 0b00): 1,
-            (0b00, 0b10): -1, (0b10, 0b11): -1, (0b11, 0b01): -1, (0b01, 0b00): -1,
-        }
 
         self.p_left = None
         self.p_right = None
@@ -45,35 +38,22 @@ class MotorDriver:
         for pin in [self.L_ENC_A, self.L_ENC_B, self.R_ENC_A, self.R_ENC_B]:
             GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-        self.left_last_state = (GPIO.input(self.L_ENC_A) << 1) | GPIO.input(self.L_ENC_B)
-        self.right_last_state = (GPIO.input(self.R_ENC_A) << 1) | GPIO.input(self.R_ENC_B)
-
-        GPIO.add_event_detect(self.L_ENC_A, GPIO.BOTH, callback=self._left_encoder_callback)
-        GPIO.add_event_detect(self.L_ENC_B, GPIO.BOTH, callback=self._left_encoder_callback)
-        GPIO.add_event_detect(self.R_ENC_A, GPIO.BOTH, callback=self._right_encoder_callback)
-        GPIO.add_event_detect(self.R_ENC_B, GPIO.BOTH, callback=self._right_encoder_callback)
+        GPIO.add_event_detect(self.L_ENC_A, GPIO.RISING, callback=self._left_encoder_callback)
+        GPIO.add_event_detect(self.R_ENC_A, GPIO.RISING, callback=self._right_encoder_callback)
 
     def _left_encoder_callback(self, channel):
-        a = GPIO.input(self.L_ENC_A)
-        b = GPIO.input(self.L_ENC_B)
-        current_state = (a << 1) | b
-        if current_state != self.left_last_state:
-            transition = (self.left_last_state, current_state)
-            if transition in self.transitions:
-                self.left_pos += self.transitions[transition]
-                self.left_counter += 1
-            self.left_last_state = current_state
+        if GPIO.input(self.L_ENC_B) == 0:
+            self.left_pos += 1
+        else:
+            self.left_pos -= 1
+        self.left_counter += 1
 
     def _right_encoder_callback(self, channel):
-        a = GPIO.input(self.R_ENC_A)
-        b = GPIO.input(self.R_ENC_B)
-        current_state = (a << 1) | b
-        if current_state != self.right_last_state:
-            transition = (self.right_last_state, current_state)
-            if transition in self.transitions:
-                self.right_pos += self.transitions[transition]
-                self.right_counter += 1
-            self.right_last_state = current_state
+        if GPIO.input(self.R_ENC_B) == 0:
+            self.right_pos += 1
+        else:
+            self.right_pos -= 1
+        self.right_counter += 1
 
     def set_pwm(self, left, right):
         """
