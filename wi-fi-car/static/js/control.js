@@ -61,6 +61,23 @@ const keyMap = {
 
 let activeKeyStack = [];
 
+// --- Speed adjustment via [ and ] ---
+const activeSpeedKeys = new Set();
+
+function adjustSpeed(delta) {
+    const newValue = Math.max(0, Math.min(100, parseInt(speedRange.value, 10) + delta));
+    speedRange.value = newValue;
+    speedDisplay.innerText = newValue;
+
+    // If currently moving/turning, re-send the active command so the new speed applies immediately
+    if (activeKeyStack.length > 0) {
+        const lastKey = activeKeyStack[activeKeyStack.length - 1];
+        const lastBtnId = keyMap[lastKey];
+        const config = buttons[lastBtnId];
+        sendCommand(config.action, config.direction);
+    }
+}
+
 window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     const btnId = keyMap[e.key];
@@ -73,6 +90,10 @@ window.addEventListener('keydown', (e) => {
     if (e.key === ' ') { // Space for stop
         sendCommand('stop', '');
         document.getElementById('btn-stop').classList.add('active');
+    }
+    if ((e.key === '[' || e.key === ']') && !activeSpeedKeys.has(e.key)) {
+        activeSpeedKeys.add(e.key);
+        adjustSpeed(e.key === ']' ? 10 : -10);
     }
 });
 
@@ -95,6 +116,9 @@ window.addEventListener('keyup', (e) => {
     }
     if (e.key === ' ') {
         document.getElementById('btn-stop').classList.remove('active');
+    }
+    if (e.key === '[' || e.key === ']') {
+        activeSpeedKeys.delete(e.key);
     }
 });
 

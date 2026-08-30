@@ -19,8 +19,8 @@ class CarController:
         # Straight-line correction tuning
         self._check_interval = 0.1    # 100ms
         self._diff_threshold = 5      # tick difference to trigger correction (1x decoding = 1/4 the ticks of before)
-        self._correction_step = 1.0   # PWM units to decrease
-        self._growth_step = 0.5       # PWM units to grow back
+        self._correction_gain = 0.15  # PWM reduction per tick of diff beyond the threshold
+        self._growth_step = 0.5       # PWM units to grow back per tick once within threshold
 
         # Calibration data points from re-calibration after motor swap: PWM -> (Left TPS, Right TPS)
         # PWM 1-13 omitted: dead zone where the motors don't overcome stiction (0 tps)
@@ -202,23 +202,33 @@ class CarController:
     def _correction_loop(self, l_base, r_base, sign):
         """
         Runs until stopped, compensating for motor differences using encoders.
-        If one wheel is running ahead (higher tick count), its PWM is reduced.
-        Then it gradually grows back to the base value once levelled out.
+        Compares how many ticks each wheel gained in the last interval (its
+        current speed), not the total accumulated since the drive started -
+        using the accumulated total would let a wheel that's fallen behind
+        keep getting cut forever, since a stopped wheel can never gain ticks
+        back and the "gap" only grows. Whichever wheel is currently spinning
+        faster gets its PWM nudged down; the other grows back toward base.
         """
         l_curr, r_curr = l_base, r_base
+        l_prev, r_prev = self.driver.get_encoders()
 
         while not self._correction_stop.wait(self._check_interval):
             l_enc, r_enc = self.driver.get_encoders()
-            diff = l_enc - r_enc
+            rate_diff = (l_enc - l_prev) - (r_enc - r_prev)
+            l_prev, r_prev = l_enc, r_enc
 
-            if diff > self._diff_threshold:
-                # Left is ahead, reduce its PWM
-                l_curr -= self._correction_step
-            elif diff < -self._diff_threshold:
-                # Right is ahead, reduce its PWM
-                r_curr -= self._correction_step
+            if rate_diff > self._diff_threshold:
+                # Left currently spinning faster: ease its PWM down
+                l_curr -= self._correction_gain * (rate_diff - self._diff_threshold)
+                if r_curr < r_base:
+                    r_curr += self._growth_step
+            elif rate_diff < -self._diff_threshold:
+                # Right currently spinning faster: ease its PWM down
+                r_curr -= self._correction_gain * (-rate_diff - self._diff_threshold)
+                if l_curr < l_base:
+                    l_curr += self._growth_step
             else:
-                # Within threshold, gradually return to base PWM
+                # Within threshold, gradually return both to base PWM
                 if l_curr < l_base:
                     l_curr += self._growth_step
                 if r_curr < r_base:
