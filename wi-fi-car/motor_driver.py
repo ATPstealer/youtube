@@ -4,10 +4,10 @@ import logging
 class MotorDriver:
     def __init__(self):
         # Pin definitions (BCM)
-        self.L_ENA, self.L_IN1, self.L_IN2 = 12, 20, 21
-        self.R_ENB, self.R_IN3, self.R_IN4 = 13, 19, 26
-        self.L_ENC_A, self.L_ENC_B = 14, 15
-        self.R_ENC_A, self.R_ENC_B = 17, 27
+        self.L_ENA, self.L_IN1, self.L_IN2 = 13, 19, 26
+        self.R_ENB, self.R_IN3, self.R_IN4 = 12, 20, 21
+        self.L_ENC_A, self.L_ENC_B = 17, 27
+        self.R_ENC_A, self.R_ENC_B = 14, 15
 
         # State initialization
         self.left_counter = 0
@@ -83,23 +83,23 @@ class MotorDriver:
         # Left Motor
         l_speed = max(-100, min(100, left))
         if l_speed >= 0:
-            GPIO.output(self.L_IN1, GPIO.LOW)
-            GPIO.output(self.L_IN2, GPIO.HIGH)
-            self.p_left.ChangeDutyCycle(l_speed)
-        else:
             GPIO.output(self.L_IN1, GPIO.HIGH)
             GPIO.output(self.L_IN2, GPIO.LOW)
+            self.p_left.ChangeDutyCycle(l_speed)
+        else:
+            GPIO.output(self.L_IN1, GPIO.LOW)
+            GPIO.output(self.L_IN2, GPIO.HIGH)
             self.p_left.ChangeDutyCycle(-l_speed)
 
         # Right Motor
         r_speed = max(-100, min(100, right))
         if r_speed >= 0:
-            GPIO.output(self.R_IN3, GPIO.HIGH)
-            GPIO.output(self.R_IN4, GPIO.LOW)
-            self.p_right.ChangeDutyCycle(r_speed)
-        else:
             GPIO.output(self.R_IN3, GPIO.LOW)
             GPIO.output(self.R_IN4, GPIO.HIGH)
+            self.p_right.ChangeDutyCycle(r_speed)
+        else:
+            GPIO.output(self.R_IN3, GPIO.HIGH)
+            GPIO.output(self.R_IN4, GPIO.LOW)
             self.p_right.ChangeDutyCycle(-r_speed)
 
     def stop(self):
