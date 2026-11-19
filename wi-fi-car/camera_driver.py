@@ -16,7 +16,8 @@ class CameraDriver:
         self.mock_mode = False
         self.video = None
         self.proc = None # Subprocess for rpicam-vid fallback
-        
+        self._buf = bytearray() # Unparsed rpicam-vid output, kept between frames
+
         # Pipelines optimized for Raspberry Pi Camera Module 3 (IMX708)
         # We prioritize native resolutions and common stable formats.
         pipelines = [
@@ -82,6 +83,7 @@ class CameraDriver:
                 '--quality', str(self.jpeg_quality),
                 '--nopreview', '-o', '-'
             ]
+            self._buf.clear()
             self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
             
             # Check if we can get at least one frame
@@ -100,29 +102,31 @@ class CameraDriver:
             return False
 
     def _get_frame_from_subprocess(self):
-        """Reads one MJPEG frame from subprocess stdout."""
+        """Reads the next MJPEG frame from subprocess stdout.
+
+        A read usually ends past the frame's EOI, inside the next frame. Those
+        bytes stay in self._buf for the next call; dropping them would lose the
+        next frame's SOI and with it every other frame.
+        """
         if not self.proc or self.proc.poll() is not None:
             return None
-        
+
         try:
-            # Search for JPEG Start Of Image (SOI)
             while True:
-                byte = self.proc.stdout.read(1)
-                if not byte: return None
-                if byte == b'\xff':
-                    byte = self.proc.stdout.read(1)
-                    if byte == b'\xd8':
-                        break
-            
-            # Read until JPEG End Of Image (EOI)
-            frame_data = b'\xff\xd8'
-            while True:
-                chunk = self.proc.stdout.read(4096)
-                if not chunk: break
-                frame_data += chunk
-                eoi_idx = frame_data.find(b'\xff\xd9')
-                if eoi_idx != -1:
-                    return frame_data[:eoi_idx+2]
+                soi = self._buf.find(b'\xff\xd8')  # JPEG Start Of Image
+                if soi == -1:
+                    del self._buf[:-1]  # keep a trailing 0xff: SOI may be split across reads
+                else:
+                    del self._buf[:soi]
+                    eoi = self._buf.find(b'\xff\xd9', 2)  # JPEG End Of Image
+                    if eoi != -1:
+                        frame = bytes(self._buf[:eoi + 2])
+                        del self._buf[:eoi + 2]
+                        return frame
+                chunk = self.proc.stdout.read(65536)
+                if not chunk:
+                    return None
+                self._buf += chunk
         except Exception as e:
             logging.error(f"Error reading frame from subprocess: {e}")
             return None
