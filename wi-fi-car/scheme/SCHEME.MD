@@ -1,14 +1,16 @@
-### LEFT MOTOR
-- **P4:** OUT1 + OUT2
-- **ENA** → pin 32 / GPIO12
-- **IN1** → pin 38 / GPIO20
-- **IN2** → pin 40 / GPIO21
+## Моя распиновка
 
-### RIGHT MOTOR
+### LEFT MOTOR
 - **P3:** OUT3 + OUT4
 - **ENB** → pin 33 / GPIO13
 - **IN3** → pin 35 / GPIO19
 - **IN4** → pin 37 / GPIO26
+
+### RIGHT MOTOR
+- **P4:** OUT1 + OUT2
+- **ENA** → pin 32 / GPIO12
+- **IN1** → pin 38 / GPIO20
+- **IN2** → pin 40 / GPIO21
 
 ### MD LOGIC
 - **3.3V** → pin 17
@@ -43,29 +45,34 @@
                GND (25) (26) GPIO7
              ID_SD (27) (28) ID_SC
              GPIO5 (29) (30) GND
-             GPIO6 (31) (32) GPIO12 [L_ENA]
- [R_ENB]    GPIO13 (33) (34) GND
- [R_IN3]    GPIO19 (35) (36) GPIO16
- [R_IN4]    GPIO26 (37) (38) GPIO20 [L_IN1]
-               GND (39) (40) GPIO21 [L_IN2]
+             GPIO6 (31) (32) GPIO12 [R_ENA]
+ [L_ENB]    GPIO13 (33) (34) GND
+ [L_IN3]    GPIO19 (35) (36) GPIO16
+ [L_IN4]    GPIO26 (37) (38) GPIO20 [R_IN1]
+               GND (39) (40) GPIO21 [R_IN2]
 ```
+
+![Распиновка Raspberry Pi 4](rpi4-pinout.webp)
 
 
 ---
 
-## Полная схема подключения
+## Еще одна схема подключения, собрал Claude
 
 ### Комплектующие
 
 **Моторы**
-- 37mm Metal Gear Motor NFP-GM37-545-EN × 2 — 50:1, 12V DC
-- 25mm Metal Gear Motor NFP-GM25-370-EN × 2 — 45:1, 130rpm, 12V DC
 - 25mm Metal Gear Motor NFP-GM25-370-EN × 2 — 34:1, 175rpm, 12V DC
+  ([nfpshop](https://nfpshop.com/product/25mm-metal-gear-motor-model-nfp-jga25-370-en))
+
+![Мотор](motor-photo.jpg)
+![Габариты](motor-outline.jpg)
+![Распиновка энкодера](encoder-wiring.jpg)
 
 **Питание**
 - RC Plus LiPo Sigma 45C-90C 2200 mAh 3S1P 11.1V, XT-60
 - RC Plus Power Plus 60 Lipo Lader AC 60W (зарядка)
-- Etronix 1-8S Lipo Battery Voltage Meter with Alarm
+- Etronix 1-8S Lipo Battery Voltage Meter with Alarm (не обязательно)
 
 **Электроника**
 - Raspberry Pi 4 Model B 4GB
@@ -73,7 +80,9 @@
 - DFRobot DC-DC Adjustable Step-down Buck Converter 5A
 - DC Motor Driver 2x7A
 
-**Кабели и крепёж**
+![Raspberry Pi 4](rpi4.jpg)
+
+**Кабели и крепёж (не эти брать, просто для примера)**
 - Силиконовый кабель 18AWG красный/чёрный (силовые линии)
 - XT60U Connector Set × 2
 - JST-XH 6p connector + cable + PCB × 4 (разъёмы моторов с энкодерами)
@@ -93,13 +102,15 @@ LiPo 3S 11.1V 2200mAh ──XT60──┬── balance ──→ Etronix Voltag
               ▼                               ▼
      Motor Driver 2x7A                 DFRobot Buck 5A
      (силовой вход VM/GND)                    │ 5V
-       ├─ P4: OUT1/OUT2 → ЛЕВЫЙ мотор         ▼
-       └─ P3: OUT3/OUT4 → ПРАВЫЙ мотор   Raspberry Pi 4 (5V)
+       ├─ P4: OUT1/OUT2 → ПРАВЫЙ мотор        ▼
+       └─ P3: OUT3/OUT4 → ЛЕВЫЙ мотор    Raspberry Pi 4 (5V)
 ```
 
 Общая земля: GND драйвера (логика) ↔ pin 6 Raspberry Pi.
 
 ### Драйвер моторов
+
+![Motor Driver 2x7A](motor-driver.webp)
 
 ```text
 Raspberry Pi 4                      Motor Driver 2x7A
@@ -107,11 +118,11 @@ pin 17  3.3V   ───────────────────→ VCC 
 pin 6   GND    ───────────────────→ GND (логика)
 
 pin 32  GPIO12 ───────────────────→ ENA ┐
-pin 38  GPIO20 ───────────────────→ IN1 ├─ P4: OUT1 + OUT2 → ЛЕВЫЙ мотор
+pin 38  GPIO20 ───────────────────→ IN1 ├─ P4: OUT1 + OUT2 → ПРАВЫЙ мотор
 pin 40  GPIO21 ───────────────────→ IN2 ┘
 
 pin 33  GPIO13 ───────────────────→ ENB ┐
-pin 35  GPIO19 ───────────────────→ IN3 ├─ P3: OUT3 + OUT4 → ПРАВЫЙ мотор
+pin 35  GPIO19 ───────────────────→ IN3 ├─ P3: OUT3 + OUT4 → ЛЕВЫЙ мотор
 pin 37  GPIO26 ───────────────────→ IN4 ┘
 ```
 
@@ -141,12 +152,12 @@ Raspberry Pi 4  CSI ──шлейф──→ Camera Module 3 Wide
 
 | Узел            | Сигнал | Провод  | Pin | GPIO   |
 |-----------------|--------|---------|----:|--------|
-| Левый мотор     | ENA    |         |  32 | GPIO12 |
-| Левый мотор     | IN1    |         |  38 | GPIO20 |
-| Левый мотор     | IN2    |         |  40 | GPIO21 |
-| Правый мотор    | ENB    |         |  33 | GPIO13 |
-| Правый мотор    | IN3    |         |  35 | GPIO19 |
-| Правый мотор    | IN4    |         |  37 | GPIO26 |
+| Левый мотор     | ENB    |         |  33 | GPIO13 |
+| Левый мотор     | IN3    |         |  35 | GPIO19 |
+| Левый мотор     | IN4    |         |  37 | GPIO26 |
+| Правый мотор    | ENA    |         |  32 | GPIO12 |
+| Правый мотор    | IN1    |         |  38 | GPIO20 |
+| Правый мотор    | IN2    |         |  40 | GPIO21 |
 | Драйвер логика  | 3.3V   |         |  17 | —      |
 | Драйвер логика  | GND    |         |   6 | —      |
 | Правый энкодер  | 3.3V   | синий   |   1 | —      |
@@ -160,7 +171,5 @@ Raspberry Pi 4  CSI ──шлейф──→ Camera Module 3 Wide
 
 ### Примечания
 
-- В `motor_driver.py` стороны поменяны относительно этой схемы (коммит 97cdecc): в коде `L` = мотор GPIO13/19/26.
-- Замер на машинке 2026-11-19: энкодер GPIO14/15 крутится вместе с мотором GPIO13/19/26, энкодер GPIO17/27 — с мотором GPIO12/20/21.
-  То есть в этой схеме пары мотор/энкодер перепутаны. В коде: `L` = мотор GPIO13/19/26 + энкодер GPIO14/15, `R` = мотор GPIO12/20/21 + энкодер GPIO17/27.
-- GPIO14/15 — это UART. Serial console должен быть выключен (`raspi-config` → Interface → Serial), иначе левый энкодер не будет считать.
+- GPIO14/15 — это UART (TX/RX). Энкодер работает и так: `GPIO.setup()` при старте переключает пины в обычный вход.
+  Рекомендация: выключить serial console (`raspi-config` → Interface → Serial), чтобы при загрузке Pi не слал логи в GPIO14, куда подключён выход энкодера.
