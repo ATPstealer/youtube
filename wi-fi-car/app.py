@@ -4,6 +4,7 @@ import threading
 import motor_driver
 import car_controller
 import camera_driver
+import config
 import time
 import logging
 import RPi.GPIO as GPIO
@@ -15,7 +16,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# Web log buffer
+# Web log buffer (re-created with the configured size in main())
 log_buffer = collections.deque(maxlen=50)
 
 class WebLogHandler(logging.Handler):
@@ -27,9 +28,18 @@ web_handler = WebLogHandler()
 web_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(web_handler)
 
+class QuietPollFilter(logging.Filter):
+    """Hides access-log lines of the UI's polling requests, they would flood the log panel."""
+    def filter(self, record):
+        msg = record.getMessage()
+        return 'GET /status' not in msg and 'GET /logs' not in msg
+
+logging.getLogger('werkzeug').addFilter(QuietPollFilter())
+
 app = Flask(__name__)
 
 # Global instances
+cfg = None
 driver = None
 controller = None
 cam = None
@@ -39,7 +49,7 @@ def get_cam():
     global cam
     with cam_lock:
         if cam is None:
-            cam = camera_driver.CameraDriver()
+            cam = camera_driver.CameraDriver(cfg['camera'])
     return cam
 
 def gen_frames():
@@ -56,7 +66,15 @@ def gen_frames():
 @app.route('/')
 def index():
     """Main page."""
-    return render_template('index.html')
+    ui = {
+        'default_speed': cfg.getint('ui', 'default_speed'),
+        'speed_step': cfg.getint('ui', 'speed_step'),
+        'trim_step': cfg.getfloat('ui', 'trim_step'),
+        'max_trim': controller.max_trim,
+        'status_poll_ms': cfg.getint('ui', 'status_poll_ms'),
+        'log_poll_ms': cfg.getint('ui', 'log_poll_ms'),
+    }
+    return render_template('index.html', ui=ui)
 
 @app.route('/video_feed')
 def video_feed():
@@ -87,6 +105,18 @@ def control():
         
     return jsonify({'status': 'ok'})
 
+@app.route('/trim', methods=['POST'])
+def set_trim():
+    """Sets the straight-line trim (%) and saves it."""
+    data = request.get_json()
+    trim = controller.set_trim(float(data.get('trim', 0)))
+    return jsonify({'status': 'ok', 'trim': trim})
+
+@app.route('/status')
+def get_status():
+    """Live encoder / PWM / sync state for the UI."""
+    return jsonify(controller.get_status())
+
 @app.route('/logs')
 def get_logs():
     """Returns the last N log entries as JSON."""
@@ -97,7 +127,7 @@ def test_camera():
     Iteration 5.1: Verifying the camera driver.
     """
     logging.info("Testing camera driver...")
-    cam = camera_driver.CameraDriver()
+    cam = camera_driver.CameraDriver(cfg['camera'])
     frame = cam.get_frame()
     if frame:
         logging.info(f"Successfully captured a frame of size {len(frame)} bytes.")
@@ -111,7 +141,7 @@ def test_motor_speed(step):
     """
     logging.info(f"Starting extended motor speed test (Step={step})")
     
-    driver = motor_driver.MotorDriver()
+    driver = motor_driver.MotorDriver(cfg['motors'])
     results = []
     
     try:
@@ -166,7 +196,7 @@ def test_motor_speed(step):
         GPIO.cleanup()
         logging.info("GPIO cleaned up.")
 
-def status_logger():
+def status_logger(interval):
     """Background thread to log encoder and PWM values periodically."""
     global driver, controller
     while True:
@@ -178,32 +208,39 @@ def status_logger():
                 logging.info(f"FULL STATUS: Encoders L={l_enc}, R={r_enc} | PWM L={l_pwm}, R={r_pwm}")
         except Exception as e:
             logging.error(f"Error in status_logger: {e}")
-        time.sleep(5.0)
+        time.sleep(interval)
 
 def main():
-    global driver, controller
-    
+    global cfg, driver, controller, log_buffer
+
     parser = argparse.ArgumentParser(description='Wi-Fi Car Control and Testing')
+    parser.add_argument('--config', default=config.DEFAULT_PATH, help='Path to config file (default: config.ini next to app.py)')
     parser.add_argument('--test-motor-speed', type=int, help='Run motor speed test with given step (e.g. 10)')
     parser.add_argument('--test-camera', action='store_true', help='Verify camera capture')
-    parser.add_argument('--port', type=int, default=5000, help='Port for web server (default: 5000)')
-    
+    parser.add_argument('--port', type=int, help='Port for web server (default: [server] port in config)')
+
     args = parser.parse_args()
+    cfg = config.load(args.config)
+    log_buffer = collections.deque(log_buffer, maxlen=cfg.getint('server', 'log_lines'))
 
     if args.test_motor_speed is not None:
         test_motor_speed(args.test_motor_speed)
     elif args.test_camera:
         test_camera()
     else:
-        logging.info(f"Starting web server on port {args.port}...")
-        driver = motor_driver.MotorDriver()
-        controller = car_controller.CarController(driver)
-        
+        host = cfg.get('server', 'host')
+        port = args.port or cfg.getint('server', 'port')
+        logging.info(f"Starting web server on {host}:{port} (config: {args.config})...")
+        driver = motor_driver.MotorDriver(cfg['motors'])
+        controller = car_controller.CarController(driver, cfg['drive'])
+
         # Start background status logger
-        threading.Thread(target=status_logger, daemon=True).start()
-        
+        status_interval = cfg.getfloat('server', 'status_log_interval')
+        if status_interval > 0:
+            threading.Thread(target=status_logger, args=(status_interval,), daemon=True).start()
+
         try:
-            app.run(host='0.0.0.0', port=args.port, threaded=True)
+            app.run(host=host, port=port, threaded=True)
         finally:
             if cam:
                 cam.release()

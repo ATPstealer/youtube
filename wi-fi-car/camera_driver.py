@@ -6,7 +6,12 @@ import threading
 import subprocess
 
 class CameraDriver:
-    def __init__(self):
+    def __init__(self, cfg):
+        """cfg: the [camera] section of config.ini."""
+        self.width = cfg.getint('width')
+        self.height = cfg.getint('height')
+        self.fps = cfg.getint('fps')
+        self.jpeg_quality = cfg.getint('jpeg_quality')
         self.lock = threading.Lock()
         self.mock_mode = False
         self.video = None
@@ -17,10 +22,10 @@ class CameraDriver:
         pipelines = [
             (
                 "libcamerasrc ! "
-                "video/x-raw,width=1536,height=864,framerate=30/1 ! "
+                f"video/x-raw,width=1536,height=864,framerate={self.fps}/1 ! "
                 "videoconvert ! "
                 "videoscale ! "
-                "video/x-raw,format=BGR,width=640,height=360,framerate=30/1 ! "
+                f"video/x-raw,format=BGR,width={self.width},height={self.height},framerate={self.fps}/1 ! "
                 "appsink drop=true max-buffers=1 sync=false",
                 "GStreamer libcamerasrc"
             )
@@ -73,7 +78,8 @@ class CameraDriver:
             logging.info("Trying camera initialization: rpicam-vid subprocess fallback")
             cmd = [
                 'rpicam-vid', '-t', '0', '--inline', '--codec', 'mjpeg',
-                '--width', '640', '--height', '360', '--framerate', '30',
+                '--width', str(self.width), '--height', str(self.height), '--framerate', str(self.fps),
+                '--quality', str(self.jpeg_quality),
                 '--nopreview', '-o', '-'
             ]
             self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
@@ -181,5 +187,5 @@ class CameraDriver:
             # Optional: image processing
             # image = cv2.resize(image, (640, 480))
             
-            ret, jpeg = cv2.imencode('.jpg', image)
+            ret, jpeg = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
             return jpeg.tobytes()

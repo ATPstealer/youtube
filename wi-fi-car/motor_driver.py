@@ -2,12 +2,16 @@ import RPi.GPIO as GPIO
 import logging
 
 class MotorDriver:
-    def __init__(self):
+    def __init__(self, cfg):
+        """cfg: the [motors] section of config.ini."""
         # Pin definitions (BCM)
-        self.L_ENA, self.L_IN1, self.L_IN2 = 13, 19, 26
-        self.R_ENB, self.R_IN3, self.R_IN4 = 12, 20, 21
-        self.L_ENC_A, self.L_ENC_B = 17, 27
-        self.R_ENC_A, self.R_ENC_B = 14, 15
+        self.L_ENA, self.L_IN1, self.L_IN2 = cfg.getint('left_ena'), cfg.getint('left_in1'), cfg.getint('left_in2')
+        self.R_ENB, self.R_IN3, self.R_IN4 = cfg.getint('right_enb'), cfg.getint('right_in3'), cfg.getint('right_in4')
+        self.L_ENC_A, self.L_ENC_B = cfg.getint('left_enc_a'), cfg.getint('left_enc_b')
+        self.R_ENC_A, self.R_ENC_B = cfg.getint('right_enc_a'), cfg.getint('right_enc_b')
+        self.left_reverse = cfg.getboolean('left_reverse')
+        self.right_reverse = cfg.getboolean('right_reverse')
+        self.pwm_frequency = cfg.getint('pwm_frequency')
 
         # State initialization
         self.left_counter = 0
@@ -30,8 +34,8 @@ class MotorDriver:
             GPIO.setup(pin, GPIO.OUT)
             GPIO.output(pin, GPIO.LOW)
 
-        self.p_left = GPIO.PWM(self.L_ENA, 1000)
-        self.p_right = GPIO.PWM(self.R_ENB, 1000)
+        self.p_left = GPIO.PWM(self.L_ENA, self.pwm_frequency)
+        self.p_right = GPIO.PWM(self.R_ENB, self.pwm_frequency)
         self.p_left.start(0)
         self.p_right.start(0)
 
@@ -60,27 +64,16 @@ class MotorDriver:
         Directly sets PWM for both motors.
         Values between -100 and 100. Positive = Forward, Negative = Backward.
         """
-        # Left Motor
-        l_speed = max(-100, min(100, left))
-        if l_speed >= 0:
-            GPIO.output(self.L_IN1, GPIO.HIGH)
-            GPIO.output(self.L_IN2, GPIO.LOW)
-            self.p_left.ChangeDutyCycle(l_speed)
-        else:
-            GPIO.output(self.L_IN1, GPIO.LOW)
-            GPIO.output(self.L_IN2, GPIO.HIGH)
-            self.p_left.ChangeDutyCycle(-l_speed)
+        self._set_motor(self.p_left, self.L_IN1, self.L_IN2, left, self.left_reverse)
+        self._set_motor(self.p_right, self.R_IN3, self.R_IN4, right, self.right_reverse)
 
-        # Right Motor
-        r_speed = max(-100, min(100, right))
-        if r_speed >= 0:
-            GPIO.output(self.R_IN3, GPIO.LOW)
-            GPIO.output(self.R_IN4, GPIO.HIGH)
-            self.p_right.ChangeDutyCycle(r_speed)
-        else:
-            GPIO.output(self.R_IN3, GPIO.HIGH)
-            GPIO.output(self.R_IN4, GPIO.LOW)
-            self.p_right.ChangeDutyCycle(-r_speed)
+    @staticmethod
+    def _set_motor(pwm, in_a, in_b, speed, reverse):
+        speed = max(-100, min(100, speed))
+        a_high = (speed >= 0) != reverse
+        GPIO.output(in_a, GPIO.HIGH if a_high else GPIO.LOW)
+        GPIO.output(in_b, GPIO.LOW if a_high else GPIO.HIGH)
+        pwm.ChangeDutyCycle(abs(speed))
 
     def stop(self):
         """Stops both motors."""

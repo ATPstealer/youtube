@@ -2,6 +2,9 @@
 
 Re-calibrated after motor swap (new motors, 1x encoder decoding).
 
+Note: recorded with the encoder pins crossed — "Left" here is the encoder on GPIO17, "Right" on GPIO14.
+In `car_controller.py` the columns are swapped to match the motors.
+
 | PWM (%) | Left (tps) | Right (tps) |
 |--------:|------------:|-------------:|
 |       1 |        0.00 |         0.00 |

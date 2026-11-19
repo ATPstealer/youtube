@@ -1,151 +1,242 @@
-const speedRange = document.getElementById('speed-range');
-const speedDisplay = document.getElementById('speed-display');
+const UI = window.CAR_UI;
+const $ = id => document.getElementById(id);
 
-speedRange.oninput = function() {
-    speedDisplay.innerText = this.value;
-}
-
-function sendCommand(action, direction) {
-    const speed = speedRange.value;
-    fetch('/control', {
+function post(url, body) {
+    return fetch(url, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action, speed, direction }),
-    });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    }).catch(() => {});
 }
+
+// --- Driving ---
+const speedRange = $('speed-range');
+const speedDisplay = $('speed-display');
 
 const buttons = {
     'btn-up': { action: 'move', direction: 'f' },
     'btn-down': { action: 'move', direction: 'b' },
     'btn-left': { action: 'turn', direction: 'l' },
     'btn-right': { action: 'turn', direction: 'r' },
-    'btn-stop': { action: 'stop', direction: '' }
+    'btn-stop': { action: 'stop', direction: '' },
 };
 
-Object.keys(buttons).forEach(id => {
-    const btn = document.getElementById(id);
-    const config = buttons[id];
-    
-    // Support both mouse and touch events
-    ['mousedown', 'touchstart'].forEach(evt => {
-        btn.addEventListener(evt, (e) => {
-            e.preventDefault();
-            sendCommand(config.action, config.direction);
-        });
-    });
-    
-    // Stop when released
-    if (id !== 'btn-stop') {
-        ['mouseup', 'touchend'].forEach(evt => {
-            btn.addEventListener(evt, (e) => {
-                e.preventDefault();
-                sendCommand('stop', '');
-            });
-        });
-    }
-});
+// e.code, so it works with any keyboard layout (also Russian)
+const keyMap = { KeyW: 'btn-up', KeyS: 'btn-down', KeyA: 'btn-left', KeyD: 'btn-right' };
 
-// --- WASD Control Logic ---
-const keyMap = {
-    'w': 'btn-up',
-    's': 'btn-down',
-    'a': 'btn-left',
-    'd': 'btn-right',
-    'W': 'btn-up',
-    'S': 'btn-down',
-    'A': 'btn-left',
-    'D': 'btn-right'
-};
+let activeKeys = [];      // held drive keys, last one wins
+let pointerBtn = null;    // d-pad button held with mouse/touch
 
-let activeKeyStack = [];
+function sendCommand(action, direction) {
+    post('/control', { action, speed: speedRange.value, direction });
+}
 
-// --- Speed adjustment via [ and ] ---
-const activeSpeedKeys = new Set();
+function activeButton() {
+    if (activeKeys.length) return keyMap[activeKeys[activeKeys.length - 1]];
+    return pointerBtn;
+}
+
+// Re-send the current move so a new speed applies immediately
+function resendActive() {
+    const id = activeButton();
+    if (id) sendCommand(buttons[id].action, buttons[id].direction);
+}
+
+function releaseAll() {
+    if (activeKeys.length || pointerBtn) sendCommand('stop', '');
+    activeKeys = [];
+    pointerBtn = null;
+    document.querySelectorAll('.btn.active').forEach(b => b.classList.remove('active'));
+}
+
+speedRange.oninput = () => { speedDisplay.innerText = speedRange.value; };
+speedRange.onchange = resendActive;
 
 function adjustSpeed(delta) {
-    const newValue = Math.max(0, Math.min(100, parseInt(speedRange.value, 10) + delta));
-    speedRange.value = newValue;
-    speedDisplay.innerText = newValue;
-
-    // If currently moving/turning, re-send the active command so the new speed applies immediately
-    if (activeKeyStack.length > 0) {
-        const lastKey = activeKeyStack[activeKeyStack.length - 1];
-        const lastBtnId = keyMap[lastKey];
-        const config = buttons[lastBtnId];
-        sendCommand(config.action, config.direction);
-    }
+    speedRange.value = Math.max(0, Math.min(100, parseInt(speedRange.value, 10) + delta));
+    speedDisplay.innerText = speedRange.value;
+    resendActive();
 }
 
-window.addEventListener('keydown', (e) => {
-    const key = e.key.toLowerCase();
-    const btnId = keyMap[e.key];
-    if (btnId && !activeKeyStack.includes(key)) {
-        activeKeyStack.push(key);
-        const config = buttons[btnId];
-        document.getElementById(btnId).classList.add('active');
-        sendCommand(config.action, config.direction);
-    }
-    if (e.key === ' ') { // Space for stop
-        sendCommand('stop', '');
-        document.getElementById('btn-stop').classList.add('active');
-    }
-    if ((e.key === '[' || e.key === ']') && !activeSpeedKeys.has(e.key)) {
-        activeSpeedKeys.add(e.key);
-        adjustSpeed(e.key === ']' ? 10 : -10);
-    }
+// D-pad: pointer capture guarantees the release event even if the
+// finger/cursor slides off the button, so the car never keeps driving.
+Object.entries(buttons).forEach(([id, cmd]) => {
+    const btn = $(id);
+    btn.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        btn.setPointerCapture(e.pointerId);
+        btn.classList.add('active');
+        sendCommand(cmd.action, cmd.direction);
+        if (cmd.action !== 'stop') pointerBtn = id;
+    });
+    const release = () => {
+        if (!activeKeys.some(k => keyMap[k] === id)) btn.classList.remove('active');
+        if (pointerBtn === id) {
+            pointerBtn = null;
+            if (activeKeys.length) resendActive(); else sendCommand('stop', '');
+        }
+    };
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointercancel', release);
+    btn.addEventListener('lostpointercapture', release);
+    btn.addEventListener('contextmenu', e => e.preventDefault());
 });
 
-window.addEventListener('keyup', (e) => {
-    const key = e.key.toLowerCase();
-    const btnId = keyMap[e.key];
+window.addEventListener('keydown', e => {
+    const btnId = keyMap[e.code];
     if (btnId) {
-        activeKeyStack = activeKeyStack.filter(k => k !== key);
-        document.getElementById(btnId).classList.remove('active');
-        
-        if (activeKeyStack.length > 0) {
-            // Re-send command for the last pressed key that is still held
-            const lastKey = activeKeyStack[activeKeyStack.length - 1];
-            const lastBtnId = keyMap[lastKey];
-            const config = buttons[lastBtnId];
-            sendCommand(config.action, config.direction);
-        } else {
+        e.preventDefault();
+        if (!activeKeys.includes(e.code)) {
+            activeKeys.push(e.code);
+            $(btnId).classList.add('active');
+            resendActive();
+        }
+    } else if (e.code === 'Space') {
+        e.preventDefault();
+        if (!e.repeat) {
+            activeKeys = [];
+            document.querySelectorAll('.btn.active').forEach(b => b.classList.remove('active'));
+            $('btn-stop').classList.add('active');
             sendCommand('stop', '');
         }
-    }
-    if (e.key === ' ') {
-        document.getElementById('btn-stop').classList.remove('active');
-    }
-    if (e.key === '[' || e.key === ']') {
-        activeSpeedKeys.delete(e.key);
+    } else if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && !e.repeat) {
+        adjustSpeed(e.code === 'BracketRight' ? UI.speed_step : -UI.speed_step);
+    } else if (e.code === 'KeyF' && !e.repeat && fsRequest) {
+        toggleFullscreen();
     }
 });
 
-// --- Log Panel Logic ---
-const logBox = document.getElementById('log-box');
-const logToggle = document.getElementById('log-toggle');
-const logIndicator = document.getElementById('log-indicator');
-
-logToggle.addEventListener('click', () => {
-    const isHidden = logBox.classList.toggle('hidden');
-    logIndicator.innerText = isHidden ? '▼' : '▲';
-    if (!isHidden) {
-        updateLogs();
+window.addEventListener('keyup', e => {
+    const btnId = keyMap[e.code];
+    if (btnId) {
+        activeKeys = activeKeys.filter(k => k !== e.code);
+        if (pointerBtn !== btnId) $(btnId).classList.remove('active');
+        if (activeKeys.length || pointerBtn) resendActive(); else sendCommand('stop', '');
+    } else if (e.code === 'Space') {
+        e.preventDefault();
+        $('btn-stop').classList.remove('active');
     }
 });
 
-function updateLogs() {
-    if (logBox.classList.contains('hidden')) return;
+// Switching tab/window while a key is held never delivers keyup: stop instead
+window.addEventListener('blur', releaseAll);
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
 
-    fetch('/logs')
-        .then(response => response.json())
-        .then(logs => {
-            logBox.innerHTML = logs.map(line => `<div class="log-entry">${line}</div>`).join('');
-            logBox.scrollTop = logBox.scrollHeight;
-        })
-        .catch(err => console.error('Error fetching logs:', err));
+// Clicking the top/slider buttons must not leave them focused, or Space would click them
+document.querySelectorAll('.icon-btn, .mini').forEach(b =>
+    b.addEventListener('pointerdown', e => e.preventDefault()));
+
+// --- Trim (straight-line correction for wheels of different size) ---
+const trimRange = $('trim-range');
+const trimDisplay = $('trim-display');
+
+function showTrim(value) {
+    trimDisplay.innerText = (value > 0 ? '+' : '') + Number(value).toFixed(1);
 }
 
-// Update logs every 2 seconds if the panel is open
-setInterval(updateLogs, 2000);
+function sendTrim() {
+    post('/trim', { trim: parseFloat(trimRange.value) });
+}
+
+trimRange.oninput = () => showTrim(trimRange.value);
+trimRange.onchange = sendTrim;   // on release; applies immediately, saved on the car
+$('trim-reset').onclick = () => {
+    trimRange.value = 0;
+    showTrim(0);
+    sendTrim();
+};
+
+// --- Live status ---
+const statusChip = $('status-chip');
+const statusText = $('status');
+let trimLoaded = false;
+
+function updateStatus() {
+    fetch('/status')
+        .then(r => r.json())
+        .then(s => {
+            if (!trimLoaded) {
+                trimRange.value = s.trim;
+                showTrim(s.trim);
+                trimLoaded = true;
+            }
+            statusText.innerText =
+                `L ${s.l_ticks} · R ${s.r_ticks} · err ${s.error} · PWM ${s.l_pwm}/${s.r_pwm} · ${s.sync}`;
+            const state = s.sync.startsWith('fault') ? 'fault' : s.sync;
+            statusChip.className = `glass status ${state}`;
+        })
+        .catch(() => {
+            statusText.innerText = 'car offline';
+            statusChip.className = 'glass status fault';
+        });
+}
+
+updateStatus();
+setInterval(updateStatus, UI.status_poll_ms);
+
+// --- Video: reconnect if the stream drops ---
+const video = $('video');
+const noVideo = $('no-video');
+video.addEventListener('load', () => noVideo.classList.add('hidden'));
+video.addEventListener('error', () => {
+    noVideo.classList.remove('hidden');
+    setTimeout(() => { video.src = `${video.dataset.src}?t=${Date.now()}`; }, 2000);
+});
+
+// --- Logs ---
+const logPanel = $('log-panel');
+const logToggle = $('log-toggle');
+
+logToggle.onclick = () => {
+    const open = !logPanel.classList.toggle('hidden');
+    logToggle.classList.toggle('on', open);
+    if (open) updateLogs();
+};
+
+function updateLogs() {
+    if (logPanel.classList.contains('hidden')) return;
+    fetch('/logs')
+        .then(r => r.json())
+        .then(logs => {
+            logPanel.replaceChildren(...logs.map(line => {
+                const div = document.createElement('div');
+                div.className = 'log-entry';
+                div.textContent = line;
+                return div;
+            }));
+            logPanel.scrollTop = logPanel.scrollHeight;
+        })
+        .catch(() => {});
+}
+
+setInterval(updateLogs, UI.log_poll_ms);
+
+// --- Fullscreen: button, F key, double-click on video; Esc exits natively ---
+const fsBtn = $('fullscreen-toggle');
+const root = document.documentElement;
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+const fsRequest = root.requestFullscreen || root.webkitRequestFullscreen;
+const fsExit = document.exitFullscreen || document.webkitExitFullscreen;
+
+function toggleFullscreen() {
+    const call = fsElement() ? () => fsExit.call(document) : () => fsRequest.call(root);
+    try { Promise.resolve(call()).catch(() => {}); } catch (e) {}
+}
+
+function onFullscreenChange() {
+    const on = !!fsElement();
+    fsBtn.textContent = on ? '\u2715 Exit fullscreen' : '\u26F6';
+    fsBtn.title = on ? 'Exit fullscreen (Esc or F)' : 'Fullscreen (F)';
+    fsBtn.classList.toggle('on', on);
+    releaseAll();   // a key held during the switch can lose its keyup
+}
+
+if (fsRequest) {
+    fsBtn.onclick = toggleFullscreen;
+    video.addEventListener('dblclick', toggleFullscreen);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    onFullscreenChange();
+} else {
+    fsBtn.classList.add('hidden');   // e.g. iPhone Safari has no fullscreen API for pages
+}

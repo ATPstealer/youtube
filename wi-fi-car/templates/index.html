@@ -2,46 +2,64 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wi-Fi Car Control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Wi-Fi Car</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>Wi-Fi Car Control</h1>
-        <div class="video-feed">
-            <img src="{{ url_for('video_feed') }}" alt="Live Feed">
-        </div>
-        
-        <div class="ui-panel">
-            <div class="speed-box">
-                <label for="speed-range">Speed: <span id="speed-display">30</span>%</label>
-                <input type="range" id="speed-range" min="0" max="100" value="30">
-            </div>
+    <img id="video" src="{{ url_for('video_feed') }}" data-src="{{ url_for('video_feed') }}" alt="">
+    <div class="no-video hidden" id="no-video">No video &mdash; reconnecting&hellip;</div>
 
-            <div class="joystick">
-                <div class="row">
-                    <button class="btn" id="btn-up">▲</button>
-                </div>
-                <div class="row">
-                    <button class="btn" id="btn-left">◀</button>
-                    <button class="btn stop" id="btn-stop">STOP</button>
-                    <button class="btn" id="btn-right">▶</button>
-                </div>
-                <div class="row">
-                    <button class="btn" id="btn-down">▼</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="log-panel">
-            <div class="log-header" id="log-toggle">
-                <span>System Logs</span>
-                <span id="log-indicator">▼</span>
-            </div>
-            <div class="log-content hidden" id="log-box"></div>
+    <div class="hud top-left">
+        <div class="glass status idle" id="status-chip">
+            <span class="dot"></span>
+            <span id="status">&mdash;</span>
         </div>
     </div>
+
+    <div class="hud top-right">
+        <button class="glass icon-btn" id="log-toggle">Logs</button>
+        <button class="glass icon-btn" id="fullscreen-toggle" title="Fullscreen">&#x26F6;</button>
+    </div>
+
+    <div class="glass log-panel hidden" id="log-panel"></div>
+
+    <div class="hud bottom">
+        <div class="glass dpad">
+            <span></span>
+            <button class="btn" id="btn-up" title="W">&#9650;</button>
+            <span></span>
+            <button class="btn" id="btn-left" title="A">&#9664;</button>
+            <button class="btn stop" id="btn-stop" title="Space">STOP</button>
+            <button class="btn" id="btn-right" title="D">&#9654;</button>
+            <span></span>
+            <button class="btn" id="btn-down" title="S">&#9660;</button>
+            <span></span>
+        </div>
+
+        <div class="keys-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> drive &middot; <kbd>Space</kbd> stop &middot; <kbd>[</kbd><kbd>]</kbd> speed &middot; <kbd>F</kbd> fullscreen</div>
+
+        <div class="glass sliders">
+            <div class="slider">
+                <div class="slider-head">
+                    <label for="speed-range">Speed</label>
+                    <b><span id="speed-display">{{ ui.default_speed }}</span>%</b>
+                </div>
+                <input type="range" id="speed-range" min="0" max="100" value="{{ ui.default_speed }}">
+            </div>
+            <div class="slider">
+                <div class="slider-head">
+                    <label for="trim-range">Trim</label>
+                    <button class="mini" id="trim-reset" title="Reset trim to 0">reset</button>
+                    <b><span id="trim-display">0.0</span>%</b>
+                </div>
+                <input type="range" id="trim-range" min="-{{ ui.max_trim }}" max="{{ ui.max_trim }}" step="{{ ui.trim_step }}" value="0">
+                <div class="hint"><span>&#9664; steer left</span><span>steer right &#9654;</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>window.CAR_UI = {{ ui|tojson }};</script>
     <script src="{{ url_for('static', filename='js/control.js') }}"></script>
 </body>
 </html>
