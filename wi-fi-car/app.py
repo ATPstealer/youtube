@@ -196,6 +196,22 @@ def test_motor_speed(step):
         GPIO.cleanup()
         logging.info("GPIO cleaned up.")
 
+def test_encoders():
+    """Live encoder readout, motors off. Turn the wheels by hand, Ctrl+C to exit."""
+    driver = motor_driver.MotorDriver(cfg['motors'])
+    print("Encoders live (count / signed position). Ctrl+C to exit.")
+    try:
+        while True:
+            l_cnt, r_cnt = driver.get_encoders()
+            print(f"\r\033[K L {l_cnt:7d} ({driver.left_pos:+7d})   "
+                  f"R {r_cnt:7d} ({driver.right_pos:+7d})", end='', flush=True)
+            time.sleep(0.05)
+    except KeyboardInterrupt:
+        print()
+    finally:
+        driver.stop()
+        GPIO.cleanup()
+
 def status_logger(interval):
     """Background thread to log encoder and PWM values periodically."""
     global driver, controller
@@ -217,6 +233,7 @@ def main():
     parser.add_argument('--config', default=config.DEFAULT_PATH, help='Path to config file (default: config.ini next to app.py)')
     parser.add_argument('--test-motor-speed', type=int, help='Run motor speed test with given step (e.g. 10)')
     parser.add_argument('--test-camera', action='store_true', help='Verify camera capture')
+    parser.add_argument('--test-encoders', action='store_true', help='Show encoder counts live in the terminal')
     parser.add_argument('--port', type=int, help='Port for web server (default: [server] port in config)')
 
     args = parser.parse_args()
@@ -227,6 +244,8 @@ def main():
         test_motor_speed(args.test_motor_speed)
     elif args.test_camera:
         test_camera()
+    elif args.test_encoders:
+        test_encoders()
     else:
         host = cfg.get('server', 'host')
         port = args.port or cfg.getint('server', 'port')
